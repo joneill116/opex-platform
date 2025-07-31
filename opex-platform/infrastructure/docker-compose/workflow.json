@@ -1,0 +1,13 @@
+{
+  "name": "Complete Test Workflow",
+  "description": "Full workflow with components",
+  "components": [
+    {"id": "source1", "type": "acquisition", "name": "Source"},
+    {"id": "transform", "type": "transformation", "name": "Transform"},
+    {"id": "publish", "type": "publish", "name": "Publish"}
+  ],
+  "connections": [
+    {"source": {"id": "source1"}, "target": {"id": "transform"}},
+    {"source": {"id": "transform"}, "target": {"id": "publish"}}
+  ]
+}

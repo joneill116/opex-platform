@@ -1,0 +1,178 @@
+x-common-variables: &common-variables
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  REDIS_URL: redis://redis:6379
+  JAEGER_AGENT_HOST: jaeger
+  JAEGER_AGENT_PORT: 6831
+  LOG_LEVEL: INFO
+
+services:
+  # API Gateway
+  kong:
+    image: kong:3.5
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ../../services/api-gateway:/kong/declarative
+    networks:
+      - opex-network
+
+  # Auth Service
+  auth-service:
+    build: 
+      context: ../..
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      <<: *common-variables
+      DATABASE_URL: postgresql://auth:auth@postgres-auth:5432/auth
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      SERVICE_NAME: auth-service
+    depends_on:
+      - postgres-auth
+      - redis
+    ports:
+      - "8002:8000"
+    networks:
+      - opex-network
+
+  # Metadata Service
+  metadata-service:
+    build:
+      context: ../..
+      dockerfile: services/metadata-service/Dockerfile
+    environment:
+      <<: *common-variables
+      DATABASE_URL: postgresql://metadata:metadata@postgres-metadata:5432/metadata
+      SERVICE_NAME: metadata-service
+    depends_on:
+      - postgres-metadata
+      - redis
+    ports:
+      - "8007:8000"
+    networks:
+      - opex-network
+
+  # Orchestration Service
+  orchestration-service:
+    build:
+      context: ../..
+      dockerfile: services/orchestration-service/Dockerfile
+    environment:
+      <<: *common-variables
+      DATABASE_URL: postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration
+      SERVICE_NAME: orchestration-service
+      METADATA_SERVICE_URL: http://metadata-service:8000
+    depends_on:
+      - postgres-orchestration
+      - kafka
+      - redis
+      - metadata-service
+    ports:
+      - "8003:8000"
+    networks:
+      - opex-network
+
+  # Databases
+  postgres-auth:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth
+      POSTGRES_DB: auth
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    networks:
+      - opex-network
+
+  postgres-orchestration:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: orchestration
+      POSTGRES_PASSWORD: orchestration
+      POSTGRES_DB: orchestration
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_orchestration_data:/var/lib/postgresql/data
+    networks:
+      - opex-network
+
+  postgres-metadata:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: metadata
+      POSTGRES_PASSWORD: metadata
+      POSTGRES_DB: metadata
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_metadata_data:/var/lib/postgresql/data
+    networks:
+      - opex-network
+
+  # Kafka and Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - opex-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - opex-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - opex-network
+
+  # Jaeger for tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # UI
+      - "6831:6831/udp" # Agent
+    networks:
+      - opex-network
+
+networks:
+  opex-network:
+    driver: bridge
+
+volumes:
+  postgres_auth_data:
+  postgres_orchestration_data:
+  postgres_metadata_data:
+  redis_data:

@@ -1,0 +1,33 @@
+_format_version: "3.0"
+
+services:
+  # Auth Service
+  - name: auth-service
+    url: http://auth-service:8000
+    routes:
+      - name: auth-routes
+        paths:
+          - /api/v1/auth
+        strip_path: false
+
+  # Orchestration Service
+  - name: orchestration-service
+    url: http://orchestration-service:8000
+    routes:
+      - name: orchestration-routes
+        paths:
+          - /api/v1/workflows
+          - /api/v1/components
+        strip_path: false
+    plugins:
+      - name: jwt
+
+  # Add other services...
+
+plugins:
+  - name: prometheus
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid
+      echo_downstream: true
