@@ -1,6 +1,6 @@
-# Runtime Guide for opex-platform
+# Runtime & Database Setup Guide for opex-platform
 
-Generated on: 2025-08-03 21:44:33
+Generated on: 2025-08-03 22:34:32
 
 ---
 
@@ -38,286 +38,352 @@ Generated on: 2025-08-03 21:44:33
    # Change at minimum: JWT_SECRET
    ```
 
-## 2. Complete Startup Guide
+## 2. Database Initialization Guide (CRITICAL)
 
-### Method 1: Using Makefile (Recommended)
+### Database Schema Issues
+Based on the repository analysis, there's a critical issue with the database migrations:
 
-1. **Install dependencies**:
-   ```bash
-   # From project root directory
-   make install
-   ```
-   Expected output: "Installing dependencies..." followed by npm installation logs
+1. **The `workflow_events` table is defined in migration files but may not be automatically applied**
+2. **Migration file exists at**: `services/orchestration-service/migrations/002_event_store_fixed.sql`
 
-2. **Build all services**:
-   ```bash
-   # From project root directory
-   make build
-   ```
-   Expected output: Docker build logs for each service
+### Manual Database Initialization Steps
 
-3. **Start all services**:
-   ```bash
-   # From project root directory
-   make dev
-   ```
-   Expected output:
-   ```
-   Services started! Access points:
-   ================================
-   Frontend:        http://localhost:3000
-   API Gateway:     http://localhost:8000
-   Auth Service:    http://localhost:8002
-   ```
-
-### Method 2: Manual Docker Compose
-
-1. **Navigate to docker-compose directory**:
+1. **Start only the database services first**:
    ```bash
    cd infrastructure/docker-compose
+   docker compose up -d postgres-auth postgres-orchestration postgres-metadata
    ```
 
-2. **Build services**:
+2. **Wait for databases to be ready** (about 10 seconds):
    ```bash
-   docker compose build
-   ```
-
-3. **Start services in detached mode**:
-   ```bash
-   docker compose up -d
-   ```
-
-4. **Check service status**:
-   ```bash
-   docker compose ps
-   ```
-
-### Startup Order & Dependencies
-The services start in this order (handled automatically by Docker Compose):
-1. Infrastructure services: PostgreSQL databases, Redis, Zookeeper
-2. Kafka (depends on Zookeeper)
-3. Jaeger (tracing)
-4. Metadata Service
-5. Auth Service
-6. Orchestration Service (depends on Metadata Service)
-7. Kong API Gateway
-8. Frontend (if included in compose)
-
-## 3. Service Verification
-
-### Check Running Services
-```bash
-# From infrastructure/docker-compose directory
-docker compose ps
-
-# Or from project root
-cd infrastructure/docker-compose && docker compose ps
-```
-
-### Service Health Checks
-
-1. **Kong API Gateway**:
-   ```bash
-   curl http://localhost:8001/status
-   ```
-
-2. **Auth Service**:
-   ```bash
-   curl http://localhost:8002/health
-   ```
-
-3. **Metadata Service**:
-   ```bash
-   curl http://localhost:8007/health
-   ```
-
-4. **Orchestration Service**:
-   ```bash
-   curl http://localhost:8003/health
-   ```
-
-5. **Kafka**:
-   ```bash
-   docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
-   ```
-
-6. **PostgreSQL Databases**:
-   ```bash
-   # Auth DB
-   docker compose exec postgres-auth pg_isready -U auth
-   
-   # Orchestration DB
+   # Check if databases are ready
    docker compose exec postgres-orchestration pg_isready -U orchestration
-   
-   # Metadata DB
+   docker compose exec postgres-auth pg_isready -U auth
    docker compose exec postgres-metadata pg_isready -U metadata
    ```
 
-7. **Redis**:
+3. **Apply the workflow_events table migration manually**:
    ```bash
-   docker compose exec redis redis-cli ping
-   # Expected: PONG
+   # Copy the migration file to the container
+   docker compose cp ../../services/orchestration-service/migrations/002_event_store_fixed.sql postgres-orchestration:/tmp/
+
+   # Execute the migration
+   docker compose exec postgres-orchestration psql -U orchestration -d orchestration -f /tmp/002_event_store_fixed.sql
    ```
 
-8. **Jaeger UI**:
-   - Open browser: http://localhost:16686
-
-### Service URLs & Ports
-
-| Service | Internal Port | External Port | URL |
-|---------|--------------|---------------|-----|
-| Kong Gateway | 8000 | 8000 | http://localhost:8000 |
-| Kong Admin | 8001 | 8001 | http://localhost:8001 |
-| Auth Service | 8000 | 8002 | http://localhost:8002 |
-| Orchestration Service | 8000 | 8003 | http://localhost:8003 |
-| Metadata Service | 8000 | 8007 | http://localhost:8007 |
-| PostgreSQL (Auth) | 5432 | 5433 | localhost:5433 |
-| PostgreSQL (Orchestration) | 5432 | 5434 | localhost:5434 |
-| PostgreSQL (Metadata) | 5432 | 5435 | localhost:5435 |
-| Kafka | 9092 | 9092 | localhost:9092 |
-| Redis | 6379 | 6379 | localhost:6379 |
-| Jaeger UI | 16686 | 16686 | http://localhost:16686 |
-
-## 4. Complete Shutdown Guide
-
-### Method 1: Using Makefile
-
-1. **Stop all services**:
+4. **Verify the tables were created**:
    ```bash
-   # From project root directory
-   make stop
+   # Check if workflow_events table exists
+   docker compose exec postgres-orchestration psql -U orchestration -d orchestration -c "\dt"
+   
+   # You should see:
+   # - workflow_events
+   # - execution_snapshots
    ```
 
-2. **Clean up (removes volumes)**:
+## 3. Complete Startup Guide
+
+### Method 1: Step-by-Step Startup (Recommended for First Time)
+
+1. **From the project root directory**:
    ```bash
-   # From project root directory
-   make clean
+   # Install frontend dependencies
+   make install
    ```
 
-### Method 2: Manual Docker Compose
+2. **Build all Docker images**:
+   ```bash
+   make build
+   ```
 
-1. **Stop services (preserves data)**:
+3. **Start infrastructure services first**:
    ```bash
    cd infrastructure/docker-compose
-   docker compose down
+   
+   # Start databases, Redis, Zookeeper
+   docker compose up -d postgres-auth postgres-orchestration postgres-metadata redis zookeeper
+   
+   # Wait 10 seconds for initialization
+   sleep 10
    ```
 
-2. **Stop services and remove volumes (deletes all data)**:
+4. **Apply database migrations manually** (as shown in section 2 above)
+
+5. **Start Kafka** (needs Zookeeper to be running):
    ```bash
-   cd infrastructure/docker-compose
-   docker compose down -v
+   docker compose up -d kafka
+   
+   # Wait for Kafka to initialize (important!)
+   sleep 15
+   
+   # Verify Kafka is ready
+   docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
    ```
+
+6. **Start remaining services**:
+   ```bash
+   # Start all other services
+   docker compose up -d
+   
+   # Check all services are running
+   docker compose ps
+   ```
+
+### Method 2: Quick Start (After Initial Setup)
+
+Once databases are initialized with tables:
+```bash
+# From project root
+make dev
+
+# Or from docker-compose directory
+cd infrastructure/docker-compose
+docker compose up -d
+```
+
+## 4. Service Verification
+
+### Check All Services Status
+```bash
+cd infrastructure/docker-compose
+docker compose ps
+
+# All services should show "running" status
+```
+
+### Health Check URLs
+
+1. **Orchestration Service** (Port 8003):
+   ```bash
+   curl http://localhost:8003/health
+   # Expected: {"status":"healthy","service":"orchestration-service"}
+   ```
+
+2. **Auth Service** (Port 8002):
+   ```bash
+   curl http://localhost:8002/health
+   # Expected: {"status":"healthy","service":"auth-service"}
+   ```
+
+3. **Metadata Service** (Port 8007):
+   ```bash
+   curl http://localhost:8007/health
+   # Expected: {"status":"healthy","service":"metadata-service"}
+   ```
+
+4. **Kong API Gateway**:
+   ```bash
+   curl http://localhost:8001/status
+   # Expected: JSON with Kong status
+   ```
+
+### Verify Database Tables
+```bash
+# Check orchestration database tables
+docker compose exec postgres-orchestration psql -U orchestration -d orchestration -c "\dt"
+
+# Should show:
+# - workflow_events
+# - execution_snapshots
+# - alembic_version (if migrations ran)
+```
+
+## 5. Troubleshooting Guide
+
+### Common Issues and Solutions
+
+#### Issue 1: "workflow_events table does not exist"
+**Solution**:
+```bash
+# Stop the orchestration service
+docker compose stop orchestration-service
+
+# Apply the migration manually
+docker compose exec postgres-orchestration psql -U orchestration -d orchestration -f /tmp/002_event_store_fixed.sql
+
+# Restart the service
+docker compose start orchestration-service
+```
+
+#### Issue 2: Kafka connection errors
+**Solution**:
+```bash
+# Restart Kafka and Zookeeper
+docker compose restart zookeeper kafka
+
+# Wait 20 seconds
+sleep 20
+
+# Verify Kafka is accessible
+docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+```
+
+#### Issue 3: Service crashes on startup
+**Check logs**:
+```bash
+# View logs for specific service
+docker compose logs -f orchestration-service
+
+# View last 100 lines
+docker compose logs --tail=100 orchestration-service
+```
+
+### Reset Everything (Fresh Start)
+```bash
+# Stop all services and remove volumes
+cd infrastructure/docker-compose
+docker compose down -v
+
+# Remove all images
+docker compose down --rmi all
+
+# Start fresh
+cd ../..
+make build
+make dev
+```
+
+## 6. Complete Shutdown Guide
+
+### Graceful Shutdown (Preserves Data)
+```bash
+# From project root
+make stop
+
+# Or manually
+cd infrastructure/docker-compose
+docker compose down
+```
+
+### Complete Cleanup (Removes All Data)
+```bash
+# From project root
+make clean
+
+# Or manually
+cd infrastructure/docker-compose
+docker compose down -v
+```
 
 ### Verify Shutdown
-
-1. **Check no containers are running**:
-   ```bash
-   docker compose ps
-   # Should show no running containers
-   ```
-
-2. **Check Docker processes**:
-   ```bash
-   docker ps | grep opex
-   # Should return empty
-   ```
-
-## 5. Quick Reference
-
-### Common Commands
-
 ```bash
-# From project root directory
+# Check no containers are running
+docker ps | grep opex
+# Should return empty
 
-# Start everything
+# Check networks are removed
+docker network ls | grep opex
+# Should return empty
+```
+
+## 7. Quick Reference
+
+### Database Commands
+```bash
+# Connect to orchestration database
+docker compose exec postgres-orchestration psql -U orchestration -d orchestration
+
+# List all tables
+\dt
+
+# Describe workflow_events table
+\d workflow_events
+
+# Exit psql
+\q
+```
+
+### Service Management
+```bash
+# Start all services
 make dev
+
+# Stop all services
+make stop
 
 # View logs
 make logs
 
-# Stop everything
-make stop
-
-# Clean everything (including data)
-make clean
+# Restart specific service
+cd infrastructure/docker-compose
+docker compose restart orchestration-service
 
 # View specific service logs
-cd infrastructure/docker-compose
-docker compose logs -f [service-name]
-# Example: docker compose logs -f auth-service
-
-# Restart a specific service
-cd infrastructure/docker-compose
-docker compose restart [service-name]
-
-# Execute command in service
-docker compose exec [service-name] [command]
-# Example: docker compose exec auth-service /bin/sh
+docker compose logs -f orchestration-service
 ```
 
-### Emergency Shutdown
+### Health Check URLs
+- Orchestration: `http://localhost:8003/health`
+- Auth: `http://localhost:8002/health`
+- Metadata: `http://localhost:8007/health`
+- Kong Status: `http://localhost:8001/status`
+- Jaeger UI: `http://localhost:16686`
 
-If services are unresponsive:
+### Port Reference
+| Service | Port | Purpose |
+|---------|------|---------|
+| 8000 | Kong Gateway | API Gateway |
+| 8001 | Kong Admin | Gateway Admin |
+| 8002 | Auth Service | Authentication |
+| 8003 | Orchestration | Workflow Management |
+| 8007 | Metadata | Metadata Service |
+| 5433 | PostgreSQL Auth | Auth Database |
+| 5434 | PostgreSQL Orchestration | Orchestration Database |
+| 5435 | PostgreSQL Metadata | Metadata Database |
+| 9092 | Kafka | Message Broker |
+| 6379 | Redis | Cache |
+| 16686 | Jaeger | Tracing UI |
 
+### Emergency Commands
 ```bash
-# Force stop all OpEx containers
-docker ps | grep opex | awk '{print $1}' | xargs -r docker stop
+# Force stop all containers
+docker stop $(docker ps -q | grep opex)
 
-# Remove all OpEx containers
-docker ps -a | grep opex | awk '{print $1}' | xargs -r docker rm -f
+# Remove all opex containers
+docker rm -f $(docker ps -a -q | grep opex)
 
-# Clean up networks
-docker network ls | grep opex | awk '{print $1}' | xargs -r docker network rm
+# Clean up everything
+docker system prune -a --volumes
 ```
 
-### Troubleshooting
+## Important Notes
 
-1. **Port already in use**:
-   ```bash
-   # Find process using port (example for port 8000)
-   lsof -i :8000  # macOS/Linux
-   netstat -ano | findstr :8000  # Windows
-   ```
-
-2. **Database connection issues**:
-   - Wait 30 seconds after startup for migrations to complete
-   - Check logs: `docker compose logs postgres-auth`
-
-3. **Service not starting**:
-   ```bash
-   # Check specific service logs
-   docker compose logs [service-name]
-   
-   # Rebuild specific service
-   docker compose build --no-cache [service-name]
-   ```
-
-4. **Frontend not accessible**:
-   - Frontend may need separate startup if not in docker-compose
-   - Check if running: `docker compose ps | grep frontend`
-
-### Development Workflow
-
-1. **Start services**: `make dev`
-2. **Monitor logs**: `make logs` (in separate terminal)
-3. **Make changes** to code
-4. **Restart affected service**:
-   ```bash
-   cd infrastructure/docker-compose
-   docker compose restart [service-name]
-   ```
-5. **Stop when done**: `make stop`
+1. **First-time setup requires manual database migration** for the workflow_events table
+2. **Kafka needs 15-20 seconds to initialize** before other services can connect
+3. **Services have dependencies** - databases must be running before application services
+4. **The frontend is not included in docker-compose** - run separately with `npm run dev` in services/frontend
+5. **Default credentials** are in the docker-compose.yml file - change for production use
 
 ---
 
 ## Additional Notes
 
+- Always run database migrations BEFORE starting services
+- If you get "table does not exist" errors, check the Database Initialization section above
+- Kafka needs 30-60 seconds to fully initialize - be patient
 - Always check the repository's README for any updates to these instructions
-- If you encounter issues, check log files in the containers/services
+- If you encounter issues, check log files: `docker compose logs [service-name]`
 - Keep this guide updated as the project evolves
+
+## Common Issues
+
+### orchestration-service fails with "workflow_events table does not exist"
+- This means database migrations haven't been run
+- Follow the Database Initialization steps above
+- Make sure postgres-orchestration is running first
+
+### Kafka connection refused
+- Kafka takes time to start (30-60 seconds)
+- Ensure zookeeper is running first
+- Check logs: `docker compose logs kafka`
+
+### Port 8003 not accessible
+- Check if orchestration-service is running: `docker compose ps orchestration-service`
+- View logs for errors: `docker compose logs orchestration-service`
+- Ensure all dependencies are running first
 
 ## Guide Generation Details
 
 - Generated using Claude API (claude-opus-4-20250514)
-- Based on analysis of Dockerfiles, Makefiles, scripts, and configuration files
+- Based on analysis of Dockerfiles, Makefiles, scripts, migration files, and configuration files
 - For questions or improvements, regenerate this guide after updating the codebase
