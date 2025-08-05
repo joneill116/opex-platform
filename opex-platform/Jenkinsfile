@@ -1,0 +1,88 @@
+pipeline {
+    agent any
+
+    environment {
+        // Define the path to the main docker-compose file
+        COMPOSE_FILE = 'infrastructure/docker-compose/docker-compose.yml'
+        // Define the path to the override file
+        OVERRIDE_FILE = 'docker-compose.override.yml'
+        // Combine them for easier use in commands
+        COMPOSE_COMMAND = "docker compose -f ${COMPOSE_FILE} -f ${OVERRIDE_FILE}"
+    }
+
+    stages {
+        stage('1. Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                // This step is handled automatically by Jenkins when checking out a project
+                checkout scm
+            }
+        }
+
+        stage('2. Environment Setup') {
+            steps {
+                echo 'Creating .env file from template...'
+                sh 'cp infrastructure/docker-compose/.env.template infrastructure/docker-compose/.env'
+            }
+        }
+
+        stage('3. Database Initialization') {
+            steps {
+                echo 'Starting only the database services...'
+                // Start only the three PostgreSQL containers in detached mode
+                sh "docker compose -f ${COMPOSE_FILE} up -d postgres-auth postgres-orchestration postgres-metadata"
+
+                echo 'Waiting for databases to initialize...'
+                // A simple sleep is often sufficient in a CI environment
+                sh 'sleep 15'
+
+                echo 'Applying critical SQL migration for orchestration service...'
+                // Copy the SQL migration file into the running container
+                sh "docker compose -f ${COMPOSE_FILE} cp ./services/orchestration-service/migrations/002_event_store_fixed.sql postgres-orchestration:/tmp/002_event_store_fixed.sql"
+                
+                // Execute the migration script using psql
+                sh "docker compose -f ${COMPOSE_FILE} exec postgres-orchestration psql -U orchestration -d orchestration -f /tmp/002_event_store_fixed.sql"
+                
+                echo 'Database initialization complete.'
+            }
+        }
+
+        stage('4. Install Dependencies') {
+            steps {
+                echo 'Installing frontend node_modules via Makefile...'
+                // This runs `npm install` inside the frontend container
+                sh 'make install'
+            }
+        }
+
+        stage('5. Build & Run Full Stack') {
+            steps {
+                echo 'Building all service images and starting the full application stack...'
+                // The `make dev` command handles building and starting all services
+                sh 'make dev'
+            }
+        }
+
+        stage('6. Health Check') {
+            steps {
+                echo 'Performing a simple health check...'
+                // Wait for services to become healthy
+                sh 'sleep 30'
+                echo 'Checking running containers...'
+                sh 'docker ps'
+                echo 'Checking frontend service...'
+                // A simple curl to the frontend should return HTML
+                sh 'curl -s --fail http://localhost:3000 | grep -q "</html>" || (echo "Frontend health check failed!" && exit 1)'
+                echo 'Health check passed.'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished. Tearing down the environment...'
+            // This ensures that all containers are stopped and removed, even if a stage fails
+            sh 'make stop'
+        }
+    }
+}
