@@ -71,10 +71,12 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
     (event: React.DragEvent) => {
       event.preventDefault()
 
-      const type = event.dataTransfer.getData('componentType') as ComponentType
+      const type = event.dataTransfer.getData('application/reactflow');
       const name = event.dataTransfer.getData('componentName')
       
-      if (!type || !name) return
+      if (typeof type === 'undefined' || !type) {
+        return;
+      }
 
       const reactFlowBounds = event.currentTarget.getBoundingClientRect()
       const position = {
@@ -88,7 +90,7 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
         position,
         data: {
           label: name,
-          type,
+          type: type as ComponentType,
           config: {},
         },
       }

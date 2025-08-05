@@ -1,5 +1,5 @@
 CREATE TABLE workflow_events (
-    event_id UUID PRIMARY KEY,
+    event_id UUID NOT NULL,
     workflow_id UUID NOT NULL,
     execution_id UUID NOT NULL,
     event_type VARCHAR(100) NOT NULL,
@@ -10,10 +10,13 @@ CREATE TABLE workflow_events (
     metadata JSONB NOT NULL DEFAULT '{}',
     
     -- Deterministic ordering
-    sequence_number BIGSERIAL UNIQUE,
+    sequence_number BIGSERIAL,
     
     -- Partitioning by workflow for performance
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    PRIMARY KEY (event_id, created_at),
+    UNIQUE (sequence_number, created_at)
 ) PARTITION BY RANGE (created_at);
 
 -- Create indexes for fast queries

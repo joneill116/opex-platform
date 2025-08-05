@@ -19,15 +19,16 @@ const componentIcons: Record<string, React.ReactNode> = {
 }
 
 export default function ComponentPalette() {
-  const { data: componentTypes, isLoading } = useComponentTypes()
+  const { componentTypes, isLoading, isError } = useComponentTypes()
 
-  const onDragStart = (event: React.DragEvent, type: ComponentType, name: string) => {
-    event.dataTransfer.setData('componentType', type)
+  const onDragStart = (event: React.DragEvent, type: string, name: string) => {
+    event.dataTransfer.setData('application/reactflow', type);
     event.dataTransfer.setData('componentName', name)
     event.dataTransfer.effectAllowed = 'move'
   }
 
   if (isLoading) return <div className="w-64 bg-gray-50 p-4">Loading components...</div>
+  if (isError) return <div className="w-64 bg-gray-50 p-4">Error loading components.</div>
 
   return (
     <div className="w-64 bg-gray-50 h-screen flex flex-col">
@@ -37,11 +38,11 @@ export default function ComponentPalette() {
       
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
-          {componentTypes?.types.map((type) => (
+          {componentTypes?.map((type) => (
             <div
               key={type.type}
               draggable
-              onDragStart={(e) => onDragStart(e, type.type as ComponentType, type.name)}
+              onDragStart={(e) => onDragStart(e, type.type, type.name)}
               className="group p-3 bg-white rounded-lg shadow-sm cursor-move hover:shadow-md transition-all duration-200 border border-gray-200"
               style={{ borderLeft: `4px solid ${type.color}` }}
             >

@@ -1,6 +1,6 @@
 services:
   orchestration-service:
-    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: sh -c "python run_migrations.py && uvicorn src.main:app --host 0.0.0.0 --port 8000"
   auth-service:
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
   metadata-service:

@@ -23,13 +23,20 @@ build:
 
 .PHONY: dev
 dev:
-	cd infrastructure/docker-compose && docker compose up -d
+	# Start databases and infrastructure first
+	cd infrastructure/docker-compose && docker compose up -d postgres-auth postgres-orchestration postgres-metadata redis zookeeper kafka
+	@echo "Waiting for databases and infrastructure to initialize..."
+	sleep 10
+	# Start backend and all other services
+	cd infrastructure/docker-compose && docker compose up -d --build
 	@echo ""
 	@echo "Services started! Access points:"
 	@echo "================================"
 	@echo "Frontend:        http://localhost:3000"
 	@echo "API Gateway:     http://localhost:8000"
 	@echo "Auth Service:    http://localhost:8002"
+	# The frontend should be started manually in a separate terminal
+	# cd services/frontend && npm run dev
 
 .PHONY: stop
 stop:

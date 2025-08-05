@@ -68,6 +68,9 @@ services:
     environment:
       <<: *common-variables
       DATABASE_URL: postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration
+      POSTGRES_USER: orchestration
+      POSTGRES_PASSWORD: orchestration
+      POSTGRES_DB: orchestration
       SERVICE_NAME: orchestration-service
       METADATA_SERVICE_URL: http://metadata-service:8000
     depends_on:
@@ -138,6 +141,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL

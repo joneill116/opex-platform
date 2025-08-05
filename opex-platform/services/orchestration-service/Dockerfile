@@ -14,7 +14,8 @@ COPY services/orchestration-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy service code
+COPY services/orchestration-service/run_migrations.py .
 COPY services/orchestration-service .
 
 # Run migrations and start service
-CMD ["sh", "-c", "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python run_migrations.py && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
