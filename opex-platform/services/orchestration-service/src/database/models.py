@@ -5,7 +5,8 @@ These models are used by Alembic for migrations.
 
 from sqlalchemy import Column, String, Integer, DateTime, JSON, BigInteger, Boolean, Text, UniqueConstraint, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMPTZ
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import TIMESTAMP
 import uuid
 
 Base = declarative_base()
@@ -20,16 +21,16 @@ class WorkflowEvent(Base):
     execution_id = Column(String(36), nullable=False, index=True)
     event_type = Column(String(100), nullable=False, index=True)
     event_version = Column(Integer, default=1)
-    timestamp = Column(TIMESTAMPTZ, nullable=False, index=True)
+    timestamp = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     actor = Column(String(255), nullable=False)
     data = Column(JSONB, nullable=False)
-    metadata = Column(JSONB, nullable=False, default={})
+    event_metadata = Column(JSONB, nullable=False, default={})
     
     # Deterministic ordering
     sequence_number = Column(BigInteger, unique=True, autoincrement=True)
     
     # Timestamp for partitioning later if needed
-    created_at = Column(TIMESTAMPTZ, server_default='NOW()', index=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default='NOW()', index=True)
 
 class ExecutionSnapshot(Base):
     """Execution state snapshots for fast recovery"""
@@ -40,7 +41,7 @@ class ExecutionSnapshot(Base):
     workflow_id = Column(String(36), nullable=False)
     sequence_number = Column(BigInteger, nullable=False)
     state = Column(JSONB, nullable=False)
-    created_at = Column(TIMESTAMPTZ, server_default='NOW()')
+    created_at = Column(TIMESTAMP(timezone=True), server_default='NOW()')
     
     # Add the unique constraint that's in the migration
     __table_args__ = (

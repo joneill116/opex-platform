@@ -36,10 +36,14 @@ class WorkflowRepository:
     - Performance optimization with connection pooling
     """
     
-    def __init__(self, db_session: AsyncSession, event_store: EventStore):
+    def __init__(self, db_session: AsyncSession, event_store: EventStore, observability=None):
         self.db = db_session
         self.event_store = event_store
-        self.observability = get_observability()
+        # Use provided observability or get from global state
+        if observability is not None:
+            self.observability = observability
+        else:
+            self.observability = get_observability()
     
     @resilient(
         circuit_breaker={'failure_threshold': 5, 'recovery_timeout': 30.0},
@@ -424,36 +428,26 @@ class WorkflowRepositoryFactory:
     """
     
     @staticmethod
-    async def create_repository(database_url: str = None, event_store: EventStore = None) -> WorkflowRepository:
+    async def create_repository(event_store: EventStore, observability=None) -> WorkflowRepository:
         """Create a workflow repository instance with all dependencies"""
         # In real implementation, create async database session
-        # For now, use None to indicate in-memory storage
+        # For now, use None to indicate event store handles persistence
         db_session = None
         
-        if not event_store:
-            # Would create event store with proper database connection
-            import asyncpg
-            db_pool = await asyncpg.create_pool(database_url or settings.DATABASE_URL)
-            event_store = EventStore(db_pool)
-            await event_store.initialize()
-        
-        return WorkflowRepository(db_session, event_store)
+        return WorkflowRepository(db_session, event_store, observability)
 
 
 # Dependency injection for FastAPI
-async def get_workflow_repository() -> WorkflowRepository:
+from fastapi import Depends, Request
+
+async def get_workflow_repository(request: Request) -> WorkflowRepository:
     """
     Dependency provider for FastAPI dependency injection.
-    Creates repository with full enterprise infrastructure.
+    Uses application state to get properly initialized dependencies.
+    This follows Martin Fowler's Dependency Injection pattern.
     """
-    event_store = getattr(get_workflow_repository, '_event_store_cache', None)
+    # Get initialized dependencies from application state
+    event_store = request.app.state.event_store
+    observability = request.app.state.observability
     
-    if not event_store:
-        # Create and cache event store
-        import asyncpg
-        db_pool = await asyncpg.create_pool(settings.DATABASE_URL)
-        event_store = EventStore(db_pool)
-        await event_store.initialize()
-        get_workflow_repository._event_store_cache = event_store
-    
-    return WorkflowRepository(None, event_store)
+    return WorkflowRepository(None, event_store, observability)

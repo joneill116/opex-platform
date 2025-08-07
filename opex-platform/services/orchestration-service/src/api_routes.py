@@ -9,7 +9,6 @@ router = APIRouter()
 
 
 @router.get("/workflows", response_model=List[Workflow])
-@router.get("/workflows", response_model=List[Workflow])
 async def list_workflows(
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),

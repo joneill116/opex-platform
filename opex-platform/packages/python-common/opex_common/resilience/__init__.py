@@ -536,16 +536,20 @@ def resilient(
             # Get or create orchestrator (this would be injected in real implementation)
             orchestrator = ResilienceOrchestrator(func.__module__.split('.')[0])
             
+            # Create a lambda to capture the method call properly
+            async def execute_func():
+                return await func(*args, **kwargs)
+            
             return await orchestrator.execute_with_resilience(
-                func=func,
+                func=execute_func,
                 operation_name=func.__name__,
                 circuit_breaker_config=circuit_breaker,
                 bulkhead_config=bulkhead,
                 retry_config=retry,
                 timeout_seconds=timeout,
                 fallback_func=fallback,
-                *args,
-                **kwargs
+                context={}
             )
         return wrapper
+    return decorator
     return decorator

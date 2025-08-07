@@ -14,12 +14,21 @@ from src.engine.core.event_store import EventStore
 from src.engine.runtime.workflow_executor import WorkflowExecutor
 from src.engine.components.test_components import create_component_registry
 from src.config import settings
+from opex_common.observability import initialize_observability
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting orchestration-service")
     
     try:
+        # Initialize observability stack first
+        observability = initialize_observability(
+            service_name=settings.SERVICE_NAME,
+            jaeger_endpoint=f"http://{settings.JAEGER_AGENT_HOST}:{settings.JAEGER_AGENT_PORT}"
+        )
+        app.state.observability = observability
+        print("✅ Observability initialized!")
+        
         # Initialize database pool using configuration
         app.state.db_pool = await asyncpg.create_pool(settings.DATABASE_URL)
         

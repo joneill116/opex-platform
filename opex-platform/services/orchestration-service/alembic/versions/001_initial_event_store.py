@@ -26,12 +26,12 @@ def upgrade() -> None:
         sa.Column('execution_id', sa.String(length=36), nullable=False),
         sa.Column('event_type', sa.String(length=100), nullable=False),
         sa.Column('event_version', sa.Integer(), nullable=True, default=1),
-        sa.Column('timestamp', postgresql.TIMESTAMPTZ(), nullable=False),
+        sa.Column('timestamp', sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column('actor', sa.String(length=255), nullable=False),
         sa.Column('data', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False, default={}),
+        sa.Column('event_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False, default={}),
         sa.Column('sequence_number', sa.BigInteger(), autoincrement=True, nullable=True),
-        sa.Column('created_at', postgresql.TIMESTAMPTZ(), server_default=sa.text('NOW()'), nullable=True),
+        sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('NOW()'), nullable=True),
         sa.PrimaryKeyConstraint('event_id'),
         sa.UniqueConstraint('sequence_number')
     )
@@ -49,7 +49,7 @@ def upgrade() -> None:
         sa.Column('workflow_id', sa.String(length=36), nullable=False),
         sa.Column('sequence_number', sa.BigInteger(), nullable=False),
         sa.Column('state', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column('created_at', postgresql.TIMESTAMPTZ(), server_default=sa.text('NOW()'), nullable=True),
+        sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('NOW()'), nullable=True),
         sa.PrimaryKeyConstraint('snapshot_id'),
         sa.UniqueConstraint('execution_id', 'sequence_number', name='uq_execution_sequence')
     )

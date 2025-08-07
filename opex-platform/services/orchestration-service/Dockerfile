@@ -16,5 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy service code
 COPY services/orchestration-service .
 
+# Set Python path to include src directory
+ENV PYTHONPATH=/app/src:$PYTHONPATH
+
 # Run migrations and start service
 CMD ["sh", "-c", "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
