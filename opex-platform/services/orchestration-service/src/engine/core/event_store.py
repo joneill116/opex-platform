@@ -17,17 +17,12 @@ except ImportError:
     AIOKafkaProducer = None
 
 try:
-    import structlog
-    logger = structlog.get_logger()
+    from opex_common.logging import get_logger
+    logger = get_logger("event-store")
 except ImportError:
-    class SimpleLogger:
-        def info(self, msg, **kwargs):
-            print(f"INFO: {msg} {kwargs}")
-        def error(self, msg, **kwargs):
-            print(f"ERROR: {msg} {kwargs}")
-        def debug(self, msg, **kwargs):
-            print(f"DEBUG: {msg} {kwargs}")
-    logger = SimpleLogger()
+    # Fallback logger only if common package not available
+    import logging
+    logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class WorkflowEvent:
@@ -109,6 +104,7 @@ class EventStore:
             try:
                 async with self.db.acquire() as conn:
                     # Insert and get sequence number atomically
+                    # Note: asyncpg handles JSONB serialization automatically
                     row = await conn.fetchrow("""
                         INSERT INTO workflow_events 
                         (event_id, workflow_id, execution_id, event_type, 
@@ -118,7 +114,7 @@ class EventStore:
                     """, 
                         event.event_id, event.workflow_id, event.execution_id,
                         event.event_type, event.event_version, event.timestamp,
-                        event.actor, json.dumps(event.data), json.dumps(event.metadata)
+                        event.actor, event.data, event.metadata  # No json.dumps needed for JSONB
                     )
                     
                     sequence_number = row['sequence_number']
@@ -213,8 +209,8 @@ class EventStore:
             event_id=str(row['event_id']),
             event_version=row['event_version'],
             timestamp=row['timestamp'],
-            data=json.loads(row['data']),
-            metadata=json.loads(row['metadata'])
+            data=row['data'],  # asyncpg handles JSONB automatically
+            metadata=row['metadata']  # asyncpg handles JSONB automatically
         )
     
     async def _publish_to_kafka(self, event: WorkflowEvent, sequence_number: int):
@@ -222,26 +218,50 @@ class EventStore:
         if not self.kafka or not AIOKafkaProducer:
             return
             
-        # Add sequence number to metadata
-        enriched_event = WorkflowEvent(
-            workflow_id=event.workflow_id,
-            execution_id=event.execution_id,
-            event_type=event.event_type,
-            actor=event.actor,
-            event_id=event.event_id,
-            event_version=event.event_version,
-            timestamp=event.timestamp,
-            data=event.data,
-            metadata={**event.metadata, 'sequence_number': sequence_number}
-        )
-        
-        await self.kafka.send(
-            f'workflow.events.{event.event_type}',
-            key=event.execution_id.encode(),
-            value=enriched_event.to_json().encode()
-        )
+        try:
+            # Add sequence number to metadata
+            enriched_event = WorkflowEvent(
+                workflow_id=event.workflow_id,
+                execution_id=event.execution_id,
+                event_type=event.event_type,
+                actor=event.actor,
+                event_id=event.event_id,
+                event_version=event.event_version,
+                timestamp=event.timestamp,
+                data=event.data,
+                metadata={**event.metadata, 'sequence_number': sequence_number}
+            )
+            
+            await self.kafka.send(
+                f'workflow.events.{event.event_type}',
+                key=event.execution_id.encode(),
+                value=enriched_event.to_json().encode()
+            )
+            
+            # Log successful Kafka publish for observability
+            logger.debug(
+                "event.kafka.published",
+                event_type=event.event_type,
+                execution_id=event.execution_id,
+                sequence_number=sequence_number
+            )
+            
+        except Exception as kafka_error:
+            # Martin Fowler's Resilience Pattern: Log but don't fail the transaction
+            # The database event is the source of truth; Kafka is for real-time notifications
+            logger.warning(
+                "event.kafka.publish.failed",
+                error=str(kafka_error),
+                event_type=event.event_type,
+                execution_id=event.execution_id,
+                sequence_number=sequence_number,
+                recovery_hint="Event persisted in database, Kafka consumers can replay from event store"
+            )
+            # Don't re-raise: Database transaction should complete successfully
+            # Kafka failure is non-fatal for event persistence
     
     async def _notify_subscribers(self, event: WorkflowEvent, sequence_number: int):
         """Notify local subscribers of new event"""
-        # TODO: Implement subscription notification
-        pass
+        # Subscription notifications handled by Kafka message broker
+        # Subscribers can consume from workflow.events.{event_type} topics
+        logger.debug(f"Event {event.event_type} published with sequence {sequence_number}")

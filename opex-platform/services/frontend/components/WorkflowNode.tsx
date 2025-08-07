@@ -1,7 +1,8 @@
 'use client'
 
 import { Handle, Position } from 'reactflow'
-import { ComponentType } from '@/lib/types/workflow'
+import { ComponentType } from '../lib/types/workflow'
+import { COMPONENT_COLORS } from '../lib/constants/componentConfig'
 import { 
   Database, 
   Shuffle, 
@@ -20,15 +21,6 @@ interface WorkflowNodeProps {
   selected: boolean
 }
 
-const nodeColors: Record<ComponentType, string> = {
-  [ComponentType.ACQUISITION]: '#3B82F6',
-  [ComponentType.TRANSFORMATION]: '#8B5CF6',
-  [ComponentType.TECHNICAL_QUALITY]: '#10B981',
-  [ComponentType.BUSINESS_QUALITY]: '#F59E0B',
-  [ComponentType.ENRICHMENT]: '#6366F1',
-  [ComponentType.PUBLISH]: '#EF4444',
-}
-
 const nodeIcons: Record<ComponentType, React.ReactNode> = {
   [ComponentType.ACQUISITION]: <Database className="w-4 h-4" />,
   [ComponentType.TRANSFORMATION]: <Shuffle className="w-4 h-4" />,
@@ -39,7 +31,7 @@ const nodeIcons: Record<ComponentType, React.ReactNode> = {
 }
 
 export default function WorkflowNode({ data, selected }: WorkflowNodeProps) {
-  const color = nodeColors[data.type] || '#6B7280'
+  const color = COMPONENT_COLORS[data.type] || '#6B7280'
   const icon = nodeIcons[data.type]
 
   return (

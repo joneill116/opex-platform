@@ -1,5 +1,5 @@
-import { useComponentTypes } from '@/lib/hooks/useComponentTypes'
-import { ComponentType } from '@/lib/types/workflow'
+import { useComponentTypes, ComponentTypeInfo } from '../lib/hooks/useComponentTypes'
+import { ComponentType } from '../lib/types/workflow'
 import { 
   Database, 
   Shuffle, 
@@ -9,13 +9,13 @@ import {
   Upload 
 } from 'lucide-react'
 
-const componentIcons: Record<string, React.ReactNode> = {
-  'acquisition': <Database className="w-5 h-5" />,
-  'transformation': <Shuffle className="w-5 h-5" />,
-  'technical-quality': <CheckCircle className="w-5 h-5" />,
-  'business-quality': <Briefcase className="w-5 h-5" />,
-  'enrichment': <PlusCircle className="w-5 h-5" />,
-  'publish': <Upload className="w-5 h-5" />,
+const componentIcons: Record<ComponentType, React.ReactNode> = {
+  [ComponentType.ACQUISITION]: <Database className="w-5 h-5" />,
+  [ComponentType.TRANSFORMATION]: <Shuffle className="w-5 h-5" />,
+  [ComponentType.TECHNICAL_QUALITY]: <CheckCircle className="w-5 h-5" />,
+  [ComponentType.BUSINESS_QUALITY]: <Briefcase className="w-5 h-5" />,
+  [ComponentType.ENRICHMENT]: <PlusCircle className="w-5 h-5" />,
+  [ComponentType.PUBLISH]: <Upload className="w-5 h-5" />,
 }
 
 export default function ComponentPalette() {
@@ -37,7 +37,7 @@ export default function ComponentPalette() {
       
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
-          {componentTypes?.types.map((type) => (
+          {componentTypes?.types.map((type: ComponentTypeInfo) => (
             <div
               key={type.type}
               draggable
@@ -50,7 +50,7 @@ export default function ComponentPalette() {
                   className="w-10 h-10 rounded-lg flex items-center justify-center text-white"
                   style={{ backgroundColor: type.color }}
                 >
-                  {componentIcons[type.type]}
+                  {componentIcons[type.type as ComponentType]}
                 </div>
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">{type.name}</div>
@@ -60,12 +60,6 @@ export default function ComponentPalette() {
             </div>
           ))}
         </div>
-      </div>
-      
-      <div className="p-4 border-t bg-white">
-        <button className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium">
-          Save Workflow
-        </button>
       </div>
     </div>
   )

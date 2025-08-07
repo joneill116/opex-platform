@@ -18,8 +18,8 @@ import 'reactflow/dist/style.css'
 
 import ComponentPalette from './ComponentPalette'
 import WorkflowNode from './WorkflowNode'
-import { Workflow, Component, ComponentType } from '@/lib/types/workflow'
-import { useUpdateWorkflow } from '@/lib/hooks/useWorkflows'
+import { Workflow, Component, ComponentType } from '../lib/types/workflow'
+import { useUpdateWorkflow } from '../lib/hooks/useWorkflows'
 import { Save, Play, RotateCcw } from 'lucide-react'
 
 interface WorkflowBuilderProps {
@@ -122,13 +122,14 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
       target_id: edge.target,
     }))
 
-    // For now, just show a save message
-    // TODO: Update the backend with components and connections
+    // Save the complete workflow with components and connections
     updateWorkflow.mutate({
       name: workflow.name,
       description: workflow.description,
       severity: workflow.severity,
       solutions: workflow.solutions,
+      components,
+      connections,
     })
   }
 

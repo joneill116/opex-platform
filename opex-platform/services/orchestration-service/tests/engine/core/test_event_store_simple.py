@@ -13,9 +13,12 @@ from src.engine.core.event_store import EventStore, WorkflowEvent
 
 async def test_event_store_connection():
     """Test basic database connection and table creation"""
-    db_pool = await asyncpg.create_pool(
-        'postgresql://orchestration:orchestration@localhost:5434/orchestration'
+    # Use environment variable for database URL to avoid hardcoding
+    database_url = os.getenv(
+        'DATABASE_URL', 
+        'postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration'
     )
+    db_pool = await asyncpg.create_pool(database_url)
     
     print("Testing Event Store Connection...")
     
@@ -44,9 +47,12 @@ async def test_event_store_connection():
 
 async def test_event_append_and_retrieve():
     """Test appending and retrieving events"""
-    db_pool = await asyncpg.create_pool(
-        'postgresql://orchestration:orchestration@localhost:5434/orchestration'
+    # Use environment variable for database URL to avoid hardcoding
+    database_url = os.getenv(
+        'DATABASE_URL', 
+        'postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration'
     )
+    db_pool = await asyncpg.create_pool(database_url)
     
     print("\nTesting Event Append and Retrieve...")
     
@@ -97,9 +103,12 @@ async def test_event_append_and_retrieve():
 
 async def test_event_filtering():
     """Test event filtering capabilities"""
-    db_pool = await asyncpg.create_pool(
-        'postgresql://orchestration:orchestration@localhost:5434/orchestration'
+    # Use environment variable for database URL to avoid hardcoding
+    database_url = os.getenv(
+        'DATABASE_URL', 
+        'postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration'
     )
+    db_pool = await asyncpg.create_pool(database_url)
     
     print("\nTesting Event Filtering...")
     

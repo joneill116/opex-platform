@@ -14,10 +14,12 @@ from src.engine.components.test_components import create_component_registry
 async def test_workflow_execution():
     """Test executing a complete workflow"""
     
-    # Connect to database
-    db_pool = await asyncpg.create_pool(
-        'postgresql://orchestration:orchestration@localhost:5434/orchestration'
+    # Connect to database - Use environment variable for database URL to avoid hardcoding
+    database_url = os.getenv(
+        'DATABASE_URL', 
+        'postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration'
     )
+    db_pool = await asyncpg.create_pool(database_url)
     
     # Create event store and executor
     event_store = EventStore(db_pool)

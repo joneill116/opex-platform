@@ -13,16 +13,15 @@ from src.api_routes import router
 from src.engine.core.event_store import EventStore
 from src.engine.runtime.workflow_executor import WorkflowExecutor
 from src.engine.components.test_components import create_component_registry
+from src.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting orchestration-service")
     
     try:
-        # Initialize database pool
-        app.state.db_pool = await asyncpg.create_pool(
-            'postgresql://orchestration:orchestration@postgres-orchestration:5432/orchestration'
-        )
+        # Initialize database pool using configuration
+        app.state.db_pool = await asyncpg.create_pool(settings.DATABASE_URL)
         
         # Initialize event store
         app.state.event_store = EventStore(app.state.db_pool)

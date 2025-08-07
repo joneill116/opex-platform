@@ -1,6 +1,15 @@
 _format_version: "3.0"
 
 services:
+  # Frontend Service (for direct access)
+  - name: frontend-service
+    url: http://frontend:3000
+    routes:
+      - name: frontend-routes
+        paths:
+          - /
+        strip_path: false
+
   # Auth Service
   - name: auth-service
     url: http://auth-service:8000

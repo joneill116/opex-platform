@@ -11,3 +11,13 @@ temporalio==1.4.0
 pydantic-settings==2.1.0
 structlog==24.1.0
 networkx==3.2.1
+
+# Enterprise observability and resilience
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-requests==0.42b0
+opentelemetry-instrumentation-psycopg2==0.42b0
+opentelemetry-exporter-jaeger-thrift==1.21.0
+tenacity==8.2.3
+httpx==0.27.0

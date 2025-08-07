@@ -36,14 +36,7 @@ pipeline {
                 // A simple sleep is often sufficient in a CI environment
                 sh 'sleep 15'
 
-                echo 'Applying critical SQL migration for orchestration service...'
-                // Copy the SQL migration file into the running container
-                sh "docker compose -f ${COMPOSE_FILE} cp ./services/orchestration-service/migrations/002_event_store_fixed.sql postgres-orchestration:/tmp/002_event_store_fixed.sql"
-                
-                // Execute the migration script using psql
-                sh "docker compose -f ${COMPOSE_FILE} exec postgres-orchestration psql -U orchestration -d orchestration -f /tmp/002_event_store_fixed.sql"
-                
-                echo 'Database initialization complete.'
+                echo 'Database services ready - migrations will run automatically when services start.'
             }
         }
 

@@ -1,91 +1,122 @@
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, Depends
 from typing import List, Optional
 from datetime import datetime
 import uuid
-from .models import Workflow, WorkflowCreate, Component, Connection, ComponentType
-#
+from .models import Workflow, WorkflowCreate, Component, Connection, ComponentType, WorkflowStatus
+from .repositories import WorkflowRepository, get_workflow_repository
+
 router = APIRouter()
 
-# In-memory storage for now (will add database later)
-workflows_db = {}
 
-
+@router.get("/workflows", response_model=List[Workflow])
 @router.get("/workflows", response_model=List[Workflow])
 async def list_workflows(
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100)
+    limit: int = Query(100, ge=1, le=100),
+    repository: WorkflowRepository = Depends(get_workflow_repository)
 ):
     """List all workflows with optional filtering"""
-    workflows = list(workflows_db.values())
-    
+    status_enum = None
     if status:
-        workflows = [w for w in workflows if w.status == status]
+        try:
+            status_enum = WorkflowStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
     
+    workflows = await repository.list_workflows(status=status_enum)
     return workflows[skip : skip + limit]
 
 @router.post("/workflows", response_model=Workflow)
-async def create_workflow(workflow_data: WorkflowCreate):
+async def create_workflow(
+    workflow_data: WorkflowCreate,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
     """Create a new workflow"""
-    workflow = Workflow(**workflow_data.dict())
-    workflows_db[workflow.id] = workflow
-    return workflow
+    return await repository.create_workflow(workflow_data)
 
 @router.get("/workflows/{workflow_id}", response_model=Workflow)
-async def get_workflow(workflow_id: str):
+async def get_workflow(
+    workflow_id: str,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
     """Get a specific workflow by ID"""
-    if workflow_id not in workflows_db:
+    workflow = await repository.get_workflow_by_id(workflow_id)
+    if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    return workflows_db[workflow_id]
+    return workflow
 
 @router.put("/workflows/{workflow_id}", response_model=Workflow)
-async def update_workflow(workflow_id: str, workflow_data: WorkflowCreate):
+async def update_workflow(
+    workflow_id: str,
+    workflow_data: WorkflowCreate,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
     """Update an existing workflow"""
-    if workflow_id not in workflows_db:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    workflow = workflows_db[workflow_id]
     update_data = workflow_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(workflow, field, value)
-    workflow.updated_at = datetime.utcnow()
-    
+    workflow = await repository.update_workflow(workflow_id, update_data)
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
     return workflow
 
 @router.delete("/workflows/{workflow_id}")
-async def delete_workflow(workflow_id: str):
-    """Delete a workflow"""
-    if workflow_id not in workflows_db:
+async def delete_workflow(
+    workflow_id: str,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
+    """Delete a workflow (soft delete - archives it)"""
+    success = await repository.delete_workflow(workflow_id)
+    if not success:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    del workflows_db[workflow_id]
-    return {"message": "Workflow deleted successfully"}
+    return {"message": "Workflow archived successfully"}
 
 @router.post("/workflows/{workflow_id}/components", response_model=Workflow)
-async def add_component(workflow_id: str, component: Component):
+async def add_component(
+    workflow_id: str,
+    component: Component,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
     """Add a component to a workflow"""
-    if workflow_id not in workflows_db:
+    workflow = await repository.get_workflow_by_id(workflow_id)
+    if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
     
-    workflow = workflows_db[workflow_id]
+    # Add component to workflow
     workflow.components.append(component)
-    workflow.updated_at = datetime.utcnow()
-    
-    return workflow
+    updated_workflow = await repository.update_workflow(workflow_id, {
+        "components": [comp.dict() for comp in workflow.components]
+    })
+    return updated_workflow
 
 @router.post("/workflows/{workflow_id}/execute")
-async def execute_workflow(workflow_id: str):
-    """Trigger workflow execution"""
-    if workflow_id not in workflows_db:
+async def execute_workflow(
+    workflow_id: str,
+    request: Request,
+    repository: WorkflowRepository = Depends(get_workflow_repository)
+):
+    """Execute a workflow"""
+    workflow = await repository.get_workflow_by_id(workflow_id)
+    if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
     
-    execution_id = str(uuid.uuid4())
+    # Convert to the format the executor expects
+    workflow_data = {
+        "id": workflow.id,
+        "name": workflow.name,
+        "components": [comp.dict() for comp in workflow.components],
+        "connections": [conn.dict() for conn in workflow.connections]
+    }
+    
+    # Get executor from app state
+    executor = request.app.state.workflow_executor
+    
+    # Execute workflow
+    execution_id = await executor.execute(workflow_data)
     
     return {
         "execution_id": execution_id,
-        "workflow_id": workflow_id,
         "status": "started",
-        "message": "Workflow execution started"
+        "workflow_id": workflow_id
     }
 
 @router.get("/components/types")
@@ -136,34 +167,6 @@ async def get_component_types():
                 "color": "#EF4444"
             }
         ]
-    }
-
-@router.post("/workflows/{workflow_id}/execute")
-async def execute_workflow(workflow_id: str, request: Request):
-    """Execute a workflow"""
-    if workflow_id not in workflows_db:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    
-    workflow = workflows_db[workflow_id]
-    
-    # Convert to the format the executor expects
-    workflow_data = {
-        "id": workflow["id"],
-        "name": workflow["name"],
-        "components": workflow.get("components", []),
-        "connections": workflow.get("connections", [])
-    }
-    
-    # Get executor from app state
-    executor = request.app.state.workflow_executor
-    
-    # Execute workflow
-    execution_id = await executor.execute(workflow_data)
-    
-    return {
-        "execution_id": execution_id,
-        "status": "started",
-        "workflow_id": workflow_id
     }
 
 @router.get("/executions/{execution_id}")

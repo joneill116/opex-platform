@@ -1,5 +1,5 @@
 x-common-variables: &common-variables
-  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
   REDIS_URL: redis://redis:6379
   JAEGER_AGENT_HOST: jaeger
   JAEGER_AGENT_PORT: 6831
@@ -40,6 +40,12 @@ services:
       - redis
     ports:
       - "8002:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - opex-network
 
@@ -77,6 +83,27 @@ services:
       - metadata-service
     ports:
       - "8003:8000"
+    networks:
+      - opex-network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ../..
+      dockerfile: services/frontend/Dockerfile
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:8002
+      NEXT_PUBLIC_ORCHESTRATION_SERVICE_URL: http://localhost:8003
+      NEXT_PUBLIC_METADATA_SERVICE_URL: http://localhost:8007
+    depends_on:
+      - kong
+      - auth-service
+      - orchestration-service
+      - metadata-service
+    ports:
+      - "3000:3000"
     networks:
       - opex-network
 
