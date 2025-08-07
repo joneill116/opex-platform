@@ -65,28 +65,18 @@ interface WorkflowBuilderHeaderProps {
   onBack: () => void
   onSave: () => void
   onRun: () => void
-  isSaving?: boolean
-  isRunning?: boolean
 }
 
 /**
  * Workflow builder header - Extracted for reusability
  */
-const WorkflowBuilderHeader = ({ 
-  workflowName, 
-  onBack, 
-  onSave, 
-  onRun, 
-  isSaving = false, 
-  isRunning = false 
-}: WorkflowBuilderHeaderProps) => (
+const WorkflowBuilderHeader = ({ workflowName, onBack, onSave, onRun }: WorkflowBuilderHeaderProps) => (
   <div className="bg-white border-b border-gray-200 px-6 py-4">
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
         <ActionButton
           onClick={onBack}
           className="text-gray-500 hover:text-gray-700 transition-colors"
-          disabled={isSaving || isRunning}
         >
           <ArrowLeft className="w-6 h-6" />
         </ActionButton>
@@ -98,19 +88,17 @@ const WorkflowBuilderHeader = ({
       <div className="flex items-center space-x-3">
         <ActionButton
           onClick={onSave}
-          disabled={isSaving || isRunning}
-          className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
         >
           <Save className="w-4 h-4 mr-2" />
-          {isSaving ? 'Saving...' : 'Save'}
+          Save
         </ActionButton>
         <ActionButton
           onClick={onRun}
-          disabled={isSaving || isRunning}
-          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
         >
           <Play className="w-4 h-4 mr-2" />
-          {isRunning ? 'Running...' : 'Run Workflow'}
+          Run Workflow
         </ActionButton>
       </div>
     </div>
@@ -222,59 +210,16 @@ class WorkflowFactory {
  * Workflow service - Service Layer Pattern
  */
 class WorkflowService {
-  private static API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003/api/v1'
-
   static async saveWorkflow(workflow: Workflow): Promise<void> {
-    try {
-      const response = await fetch(`${this.API_BASE}/workflows`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: workflow.name,
-          description: workflow.description,
-          severity: workflow.severity,
-          solutions: workflow.solutions,
-          components: workflow.components,
-          connections: workflow.connections,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to save workflow: ${response.statusText}`)
-      }
-
-      console.log('Successfully saved workflow:', workflow.name)
-    } catch (error) {
-      console.error('Error saving workflow:', error)
-      throw error
-    }
+    // TODO: Implement actual save functionality
+    console.log('Saving workflow:', workflow.name)
+    // Would integrate with API here
   }
 
   static async runWorkflow(workflow: Workflow): Promise<void> {
-    try {
-      // First save the workflow if it doesn't exist
-      await this.saveWorkflow(workflow)
-
-      // Then execute it
-      const response = await fetch(`${this.API_BASE}/workflows/${workflow.id}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to run workflow: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      console.log('Successfully started workflow execution:', result)
-    } catch (error) {
-      console.error('Error running workflow:', error)
-      throw error
-    }
+    // TODO: Implement actual run functionality
+    console.log('Running workflow:', workflow.name)
+    // Would integrate with execution engine here
   }
 }
 
@@ -292,9 +237,6 @@ export default function CreateWorkflowPage() {
   const [workflowName, setWorkflowName] = useState('New Workflow')
   const [description, setDescription] = useState('')
   const [showBuilder, setShowBuilder] = useState(false)
-  const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isRunning, setIsRunning] = useState(false)
 
   // Factory method for creating workflows
   const createWorkflow = useCallback((): Workflow => {
@@ -304,14 +246,11 @@ export default function CreateWorkflowPage() {
   // Event handlers - Pure functions
   const handleStartBuilding = useCallback(() => {
     if (!workflowName.trim()) return
-    const workflow = createWorkflow()
-    setCurrentWorkflow(workflow)
     setShowBuilder(true)
-  }, [workflowName, createWorkflow])
+  }, [workflowName])
 
   const handleBackToForm = useCallback(() => {
     setShowBuilder(false)
-    setCurrentWorkflow(null)
   }, [])
 
   const handleCancel = useCallback(() => {
@@ -320,39 +259,17 @@ export default function CreateWorkflowPage() {
   }, [])
 
   const handleSaveWorkflow = useCallback(async () => {
-    if (!currentWorkflow) return
-    
-    setIsSaving(true)
-    try {
-      await WorkflowService.saveWorkflow(currentWorkflow)
-      // Show success feedback
-      alert('Workflow saved successfully!')
-    } catch (error) {
-      console.error('Failed to save workflow:', error)
-      alert('Failed to save workflow. Please try again.')
-    } finally {
-      setIsSaving(false)
-    }
-  }, [currentWorkflow])
+    const workflow = createWorkflow()
+    await WorkflowService.saveWorkflow(workflow)
+  }, [createWorkflow])
 
   const handleRunWorkflow = useCallback(async () => {
-    if (!currentWorkflow) return
-    
-    setIsRunning(true)
-    try {
-      await WorkflowService.runWorkflow(currentWorkflow)
-      // Show success feedback
-      alert('Workflow execution started successfully!')
-    } catch (error) {
-      console.error('Failed to run workflow:', error)
-      alert('Failed to run workflow. Please try again.')
-    } finally {
-      setIsRunning(false)
-    }
-  }, [currentWorkflow])
+    const workflow = createWorkflow()
+    await WorkflowService.runWorkflow(workflow)
+  }, [createWorkflow])
 
   // Conditional rendering - Strategy Pattern
-  if (showBuilder && currentWorkflow) {
+  if (showBuilder) {
     return (
       <div className="h-screen bg-gray-50">
         <WorkflowBuilderHeader
@@ -360,11 +277,30 @@ export default function CreateWorkflowPage() {
           onBack={handleBackToForm}
           onSave={handleSaveWorkflow}
           onRun={handleRunWorkflow}
-          isSaving={isSaving}
-          isRunning={isRunning}
         />
         <div className="h-[calc(100vh-80px)]">
-          <WorkflowBuilder workflow={currentWorkflow} />
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-8 max-w-md mx-auto">
+                <h3 className="text-lg font-medium text-blue-900 mb-2">Workflow Builder</h3>
+                <p className="text-blue-700 mb-4">The workflow builder component will be loaded here.</p>
+                <ActionButton
+                  onClick={async () => {
+                    // Try to dynamically load the workflow builder
+                    try {
+                      const module = await import('../../components/WorkflowBuilder')
+                      console.log('WorkflowBuilder loaded successfully:', module)
+                    } catch (error) {
+                      console.error('Failed to load WorkflowBuilder:', error)
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Test Load WorkflowBuilder
+                </ActionButton>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )

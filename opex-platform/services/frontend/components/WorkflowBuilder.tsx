@@ -18,9 +18,10 @@ import 'reactflow/dist/style.css'
 
 import ComponentPalette from './ComponentPalette'
 import WorkflowNode from './WorkflowNode'
+import ComponentConfigPanel from './ComponentConfigPanel'
 import { Workflow, Component, ComponentType } from '../lib/types/workflow'
 import { useUpdateWorkflow } from '../lib/hooks/useWorkflows'
-import { Save, Play, RotateCcw } from 'lucide-react'
+import { Save, Play, RotateCcw, Settings } from 'lucide-react'
 
 interface WorkflowBuilderProps {
   workflow: Workflow
@@ -57,6 +58,12 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [configPanelOpen, setConfigPanelOpen] = useState(false)
+  const [configNodeData, setConfigNodeData] = useState<{
+    nodeId: string
+    componentType: ComponentType
+    config: Record<string, any>
+  } | null>(null)
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({
@@ -107,6 +114,33 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
     setSelectedNode(node.id)
   }, [])
 
+  const onNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // Open configuration panel on double-click
+    setConfigNodeData({
+      nodeId: node.id,
+      componentType: node.data.type,
+      config: node.data.config || {}
+    })
+    setConfigPanelOpen(true)
+  }, [])
+
+  const handleConfigUpdate = useCallback((nodeId: string, config: Record<string, any>) => {
+    // Update node configuration
+    setNodes((nds) =>
+      nds.map((node) =>
+        node.id === nodeId
+          ? { ...node, data: { ...node.data, config } }
+          : node
+      )
+    )
+    setConfigPanelOpen(false)
+  }, [setNodes])
+
+  const handleConfigPanelClose = useCallback(() => {
+    setConfigPanelOpen(false)
+    setConfigNodeData(null)
+  }, [])
+
   const handleSave = async () => {
     // Convert ReactFlow nodes/edges back to workflow format
     const components: Component[] = nodes.map(node => ({
@@ -147,6 +181,7 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
           onDrop={onDrop}
           onDragOver={onDragOver}
           onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
           nodeTypes={nodeTypes}
           fitView
           className="bg-gray-50"
@@ -155,7 +190,29 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
           <Controls className="bg-white border-gray-200" />
           
           <Panel position="top-center" className="bg-white px-4 py-2 shadow-lg rounded-lg m-4">
-            <h1 className="text-xl font-semibold text-gray-800">{workflow.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold text-gray-800">{workflow.name}</h1>
+              {selectedNode && (
+                <button
+                  onClick={() => {
+                    const node = nodes.find(n => n.id === selectedNode)
+                    if (node) {
+                      setConfigNodeData({
+                        nodeId: node.id,
+                        componentType: node.data.type,
+                        config: node.data.config || {}
+                      })
+                      setConfigPanelOpen(true)
+                    }
+                  }}
+                  className="flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                  title="Configure selected component"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure
+                </button>
+              )}
+            </div>
           </Panel>
           
           <Panel position="top-right" className="m-4">
@@ -185,6 +242,17 @@ export default function WorkflowBuilder({ workflow }: WorkflowBuilderProps) {
           </Panel>
         </ReactFlow>
       </div>
+
+      {/* Component Configuration Panel */}
+      {configPanelOpen && configNodeData && (
+        <ComponentConfigPanel
+          nodeId={configNodeData.nodeId}
+          componentType={configNodeData.componentType}
+          config={configNodeData.config}
+          onConfigUpdate={handleConfigUpdate}
+          onClose={handleConfigPanelClose}
+        />
+      )}
     </div>
   )
 }

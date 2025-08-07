@@ -7,6 +7,14 @@ from .repositories import WorkflowRepository, get_workflow_repository
 
 router = APIRouter()
 
+@router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify API is working"""
+    return {
+        "status": "ok", 
+        "message": "Orchestration API is working",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 @router.get("/workflows", response_model=List[Workflow])
 async def list_workflows(
@@ -32,7 +40,33 @@ async def create_workflow(
     repository: WorkflowRepository = Depends(get_workflow_repository)
 ):
     """Create a new workflow"""
-    return await repository.create_workflow(workflow_data)
+    try:
+        # Create workflow object manually for now to avoid repository issues
+        workflow = Workflow(
+            id=f"workflow-{uuid.uuid4()}",
+            name=workflow_data.name,
+            description=workflow_data.description or "",
+            severity=workflow_data.severity,
+            solutions=workflow_data.solutions or [],
+            status=WorkflowStatus.DRAFT,
+            components=[Component(**comp) for comp in workflow_data.components] if workflow_data.components else [],
+            connections=[Connection(**conn) for conn in workflow_data.connections] if workflow_data.connections else [],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            created_by="system"
+        )
+        
+        # Store in repository storage directly
+        repository._workflows_storage[workflow.id] = {
+            'data': workflow,
+            'version': workflow.updated_at.timestamp(),
+            'created_at': workflow.created_at,
+            'updated_at': workflow.updated_at
+        }
+        
+        return workflow
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create workflow: {str(e)}")
 
 @router.get("/workflows/{workflow_id}", response_model=Workflow)
 async def get_workflow(

@@ -70,11 +70,8 @@ class WorkflowRepository:
                 # Validate workflow integrity
                 await self._validate_workflow(workflow)
                 
-                # Store in database with transaction
-                async with self.db.begin():
-                    # In a real implementation, this would use SQLAlchemy ORM models
-                    # For now, we'll use a sophisticated in-memory approach that maintains enterprise patterns
-                    await self._store_workflow_with_versioning(workflow)
+                # Store workflow using in-memory storage with enterprise patterns
+                await self._store_workflow_with_versioning(workflow)
                 
                 # Record event for event sourcing
                 await self.event_store.append(WorkflowEvent(
@@ -214,9 +211,8 @@ class WorkflowRepository:
                 # Apply updates with validation
                 updated_workflow = await self._apply_updates_with_validation(workflow, updates)
                 
-                # Store with versioning
-                async with self.db.begin():
-                    await self._store_workflow_with_versioning(updated_workflow)
+                # Store with versioning using in-memory storage
+                await self._store_workflow_with_versioning(updated_workflow)
                 
                 # Record update event
                 await self.event_store.append(WorkflowEvent(
@@ -271,8 +267,8 @@ class WorkflowRepository:
                 workflow.status = WorkflowStatus.ARCHIVED
                 workflow.updated_at = datetime.utcnow()
                 
-                async with self.db.begin():
-                    await self._store_workflow_with_versioning(workflow)
+                # Store the archived workflow using in-memory storage
+                await self._store_workflow_with_versioning(workflow)
                 
                 # Record deletion event
                 await self.event_store.append(WorkflowEvent(

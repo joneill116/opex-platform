@@ -9,7 +9,9 @@ import {
   CheckCircle, 
   Briefcase, 
   PlusCircle, 
-  Upload 
+  Upload,
+  Settings,
+  AlertTriangle
 } from 'lucide-react'
 
 interface WorkflowNodeProps {
@@ -33,12 +35,16 @@ const nodeIcons: Record<ComponentType, React.ReactNode> = {
 export default function WorkflowNode({ data, selected }: WorkflowNodeProps) {
   const color = COMPONENT_COLORS[data.type] || '#6B7280'
   const icon = nodeIcons[data.type]
+  
+  // Check if component is configured
+  const isConfigured = data.config && Object.keys(data.config).length > 0
+  const hasRequiredConfig = isConfigured // You could add more sophisticated validation here
 
   return (
     <div
       className={`px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[200px] ${
         selected ? 'border-blue-500 shadow-xl' : 'border-gray-200'
-      } hover:shadow-xl transition-all duration-200`}
+      } hover:shadow-xl transition-all duration-200 relative`}
       style={{ borderTop: `4px solid ${color}` }}
     >
       <Handle 
@@ -55,11 +61,34 @@ export default function WorkflowNode({ data, selected }: WorkflowNodeProps) {
         >
           {icon}
         </div>
-        <div>
+        <div className="flex-1">
           <div className="font-semibold text-gray-800">{data.label}</div>
           <div className="text-xs text-gray-500 capitalize">{data.type.replace('-', ' ')}</div>
         </div>
+        
+        {/* Configuration Status Indicator */}
+        <div className="flex items-center gap-1">
+          {isConfigured ? (
+            <div className="flex items-center text-green-600" title="Component configured">
+              <CheckCircle className="w-4 h-4" />
+            </div>
+          ) : (
+            <div className="flex items-center text-orange-500" title="Component needs configuration">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          )}
+          <div title="Double-click to configure">
+            <Settings className="w-3 h-3 text-gray-400" />
+          </div>
+        </div>
       </div>
+      
+      {/* Configuration Summary */}
+      {isConfigured && (
+        <div className="mt-2 text-xs text-gray-500">
+          {Object.keys(data.config).length} parameter{Object.keys(data.config).length !== 1 ? 's' : ''} configured
+        </div>
+      )}
       
       <Handle 
         type="source" 
